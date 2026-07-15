@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Shortener</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">🔗 URL Shortener</h1>
+        <form id="shorten-form" class="space-y-4">
+            <div>
+                <label for="url" class="block text-sm font-medium text-gray-700">Original URL</label>
+                <input type="url" id="url" name="url" required placeholder="https://example.com" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            </div>
+            <button type="submit" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Shorten
+            </button>
+        </form>
+        
+        <div id="result" class="mt-6 hidden">
+            <h3 class="text-lg font-medium text-gray-900">Your short URL:</h3>
+            <div class="mt-2 flex items-center bg-gray-50 border border-gray-300 rounded-md p-2">
+                <a href="#" id="short-url" target="_blank" class="text-indigo-600 hover:text-indigo-500 truncate flex-1"></a>
+            </div>
+            <div class="mt-4 text-sm text-gray-500" id="stats">
+                <!-- Stats will appear here -->
+            </div>
+        </div>
+        
+        <div id="error" class="mt-4 text-red-500 text-sm hidden"></div>
+    </div>
+
+    <script>
+        document.getElementById('shorten-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const originalUrl = document.getElementById('url').value;
+            const resultDiv = document.getElementById('result');
+            const errorDiv = document.getElementById('error');
+            const shortUrlA = document.getElementById('short-url');
+            const statsDiv = document.getElementById('stats');
+
+            resultDiv.classList.add('hidden');
+            errorDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/v1/urls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ original_url: originalUrl })
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to shorten URL');
+                }
+
+                const shortLink = window.location.origin + '/' + data.short_code;
+                shortUrlA.href = shortLink;
+                shortUrlA.textContent = shortLink;
+                resultDiv.classList.remove('hidden');
+
+            } catch (err) {
+                errorDiv.textContent = err.message;
+                errorDiv.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
