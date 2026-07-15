@@ -1,0 +1,56 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+
+  enable:
+    # Go standard
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - gosimple
+
+    # Style
+    - revive
+    - misspell
+
+    # Error handling
+    - errorlint
+    - nilerr
+    - nilnil
+    - wrapcheck
+
+    # Bugs
+    - bodyclose
+    - copyloopvar
+    - durationcheck
+    - exhaustive
+    - noctx
+
+    # Security
+    - gosec
+
+    # Performance
+    - prealloc
+
+    # SQL
+    - sqlclosecheck
+
+    # Code quality
+    - unconvert
+    - unparam
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -22,7 +22,6 @@ type URLStats struct {
 
 // URLRepository represent the repository contract
 type URLRepository interface {
-	GenerateID(ctx context.Context) (uint64, error)
 	Store(ctx context.Context, url *URL) error
 	GetByShortCode(ctx context.Context, shortCode string) (*URL, error)
 	IncrementClick(ctx context.Context, shortCode string) error

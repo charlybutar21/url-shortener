@@ -4,11 +4,12 @@ A highly scalable, production-ready URL Shortener built with **Go 1.25**, applyi
 
 ## ✨ Features
 
-- **Blazing Fast Redirection**: Generates unique, 7-character Base62 short codes optimized for read-heavy operations.
-- **Click Analytics**: Tracks total clicks for every shortened URL.
+- **Blazing Fast Redirection**: Generates unique, true random 7-character short codes (e.g. `Xk2a0B1`) optimized for read-heavy operations.
+- **Collision Handling**: Implements a retry mechanism at the usecase layer to guarantee uniqueness against database collisions during concurrent short code generation.
+- **Click Analytics**: Tracks total clicks for every shortened URL asynchronously.
 - **Clean Architecture**: Strictly separated layers (Domain, Usecase, Repository, Delivery) ensuring maximum testability and maintainability.
-- **Collision-Proof ID Generation**: Uses PostgreSQL's `BIGSERIAL` sequence (`nextval`) as a Key Generation Service (KGS) before Base62 encoding to completely avoid short code collisions.
 - **Server-Side Rendered (SSR) UI**: Includes a lightweight, vanilla HTML/JS frontend served directly by the Go backend—no separate build step required.
+- **Testing & CI**: Comprehensive Unit Tests (using `testify/mock`) and continuous integration pipeline configured with `golangci-lint` via GitHub Actions.
 - **Health Checks**: Built-in `/api/v1/health` endpoint for infrastructure monitoring.
 
 ## 🛠️ Tech Stack
@@ -18,6 +19,8 @@ A highly scalable, production-ready URL Shortener built with **Go 1.25**, applyi
 - **Database**: PostgreSQL 15
 - **DB Driver**: [jackc/pgx/v5](https://github.com/jackc/pgx) (High-performance, pure Go Postgres driver)
 - **Frontend**: HTML5, TailwindCSS (via CDN), Vanilla JavaScript
+- **Testing**: [testify](https://github.com/stretchr/testify)
+- **Linter**: golangci-lint
 
 ## 🏗️ Architecture Design
 
@@ -25,7 +28,7 @@ A highly scalable, production-ready URL Shortener built with **Go 1.25**, applyi
 This project adheres to Uncle Bob's Clean Architecture. Dependencies always point **inwards** towards the Domain layer.
 
 1. **Domain (Entities)**: The innermost layer. Contains pure Go structs (`URL`) and interface contracts (`URLRepository`, `URLUsecase`). It has zero knowledge of databases or web frameworks.
-2. **Usecase (Business Logic)**: The brain of the application. Orchestrates the flow: validates inputs, interacts with the repository to get a unique numeric ID, encodes the ID to Base62, and persists the entity.
+2. **Usecase (Business Logic)**: The brain of the application. Orchestrates the flow: validates inputs, generates a random 7-character string, handles potential database constraint collisions with retries, and persists the entity.
 3. **Repository (Interface Adapters)**: Database layer. Implements the `URLRepository` interface to execute raw SQL queries against PostgreSQL.
 4. **Delivery (Interface Adapters)**: HTTP transport layer. Parses incoming HTTP requests, invokes usecases, and returns JSON/HTML responses.
 
@@ -34,29 +37,34 @@ To understand how the code executes, let's trace a typical request (e.g., Shorte
 1. **Entry Point (`cmd/api/main.go`)**: The application starts here. It connects to the database, initializes the `Repository` and `Usecase` layers, injects them into the HTTP `Handler` (Delivery), and starts the server.
 2. **Delivery Layer (`internal/delivery/http/url_handler.go`)**: The router catches the `POST /api/v1/urls` request. It parses the JSON body to get the original URL, and passes it to the Usecase layer.
 3. **Usecase Layer (`internal/usecase/url_usecase.go`)**: The business logic executes.
-   - It first validates the URL format.
-   - It calls `repo.GenerateID()` to get a collision-proof unique ID from PostgreSQL.
-   - It converts that ID to a 7-character string using `base62.Encode()`.
+   - It validates the URL format.
+   - It generates a random 7-character short code using the `random` utility.
    - It bundles this data into a `domain.URL` entity and calls `repo.Store()` to save it.
+   - If a collision occurs (database unique constraint error), it retries automatically.
 4. **Repository Layer (`internal/repository/postgres/url_repo.go`)**: Executes the raw `INSERT INTO urls ...` SQL query to save the data into PostgreSQL.
 5. **Response**: The result flows backward. The Usecase returns the `URL` entity to the Handler, and the Handler formats it as a `201 Created` JSON response to the user.
 
 ### Folder Structure
 ```text
 url-shortener/
+├── .github/
+│   └── workflows/
+│       └── golangci-lint.yml # CI pipeline configuration
 ├── cmd/
 │   └── api/
 │       └── main.go           # Application entrypoint & dependency injection wiring
 ├── internal/
 │   ├── delivery/
+│   │   └── http/             # HTTP Handlers (API endpoints & UI rendering)
 │   ├── domain/               # Core business models & interface definitions
 │   ├── repository/
 │   │   └── postgres/         # PostgreSQL database implementation
-│   └── usecase/              # Application business rules
+│   └── usecase/              # Application business rules & Unit Tests
 ├── migrations/               # Database initialization SQL scripts
 ├── pkg/
-│   └── base62/               # Reusable utility for Base62 encoding/decoding
+│   └── random/               # Reusable utility for true random string generation
 ├── web/                      # HTML templates for Frontend SSR
+├── .golangci.yml             # Linter rules
 ├── docker-compose.yml        # Docker configuration for PostgreSQL
 ├── go.mod                    # Go module dependencies (v1.25)
 └── README.md
@@ -70,8 +78,8 @@ While URL Shorteners seem like a great fit for NoSQL (Key-Value), we opted for a
 ### Table: `urls`
 | Column Name  | Type | Constraints | Description |
 | ------------ | ---- | ----------- | ----------- |
-| `id`         | `BIGSERIAL` | `PRIMARY KEY` | Auto-incrementing numeric ID used for KGS |
-| `short_code` | `VARCHAR(7)`| `UNIQUE, NOT NULL`| The Base62 encoded string (e.g., `xyz123A`) |
+| `id`         | `BIGSERIAL` | `PRIMARY KEY` | Auto-incrementing numeric internal ID |
+| `short_code` | `VARCHAR(7)`| `UNIQUE, NOT NULL`| The random 7-character string (e.g., `Xk2a0B1`) |
 | `original_url`| `VARCHAR(2048)`| `NOT NULL`| The target long URL |
 | `click_count`| `BIGINT` | `DEFAULT 0` | Total clicks tracker |
 | `created_at` | `TIMESTAMP` | `DEFAULT CURRENT_TIMESTAMP` | Creation timestamp |
@@ -98,7 +106,13 @@ While URL Shorteners seem like a great fit for NoSQL (Key-Value), we opted for a
    go mod tidy
    ```
 
-3. **Run the Application**
+3. **Run the Tests & Linter**
+   ```bash
+   go test ./...
+   golangci-lint run
+   ```
+
+4. **Run the Application**
    ```bash
    go run cmd/api/main.go
    ```
@@ -118,7 +132,7 @@ While URL Shorteners seem like a great fit for NoSQL (Key-Value), we opted for a
   ```json
   {
     "id": 1,
-    "short_code": "1",
+    "short_code": "Xk2a0B1",
     "original_url": "https://en.wikipedia.org/wiki/System_design",
     "click_count": 0,
     "created_at": "2026-07-15T10:00:00Z"
@@ -134,7 +148,7 @@ While URL Shorteners seem like a great fit for NoSQL (Key-Value), we opted for a
 - **Response (200 OK):**
   ```json
   {
-    "short_code": "1",
+    "short_code": "Xk2a0B1",
     "click_count": 42
   }
   ```

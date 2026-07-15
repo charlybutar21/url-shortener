@@ -6,7 +6,7 @@ import (
 	"net/url"
 	
 	"url-shortener/internal/domain"
-	"url-shortener/pkg/base62"
+	"url-shortener/pkg/random"
 )
 
 type urlUsecase struct {
@@ -29,25 +29,25 @@ func (u *urlUsecase) ShortenURL(ctx context.Context, originalURL string) (*domai
 		return nil, errors.New("invalid url format")
 	}
 
-	id, err := u.urlRepo.GenerateID(ctx)
-	if err != nil {
-		return nil, err
+	var newURL *domain.URL
+	
+	// Retry loop in case of random short code collision
+	for i := 0; i < 5; i++ {
+		shortCode := random.Generate(7)
+		
+		newURL = &domain.URL{
+			ShortCode:   shortCode,
+			OriginalURL: originalURL,
+		}
+
+		err = u.urlRepo.Store(ctx, newURL)
+		if err == nil {
+			return newURL, nil
+		}
+		// If err != nil, assume it's a unique constraint collision and try again.
 	}
 
-	shortCode := base62.Encode(id)
-
-	newURL := &domain.URL{
-		ID:          id,
-		ShortCode:   shortCode,
-		OriginalURL: originalURL,
-	}
-
-	err = u.urlRepo.Store(ctx, newURL)
-	if err != nil {
-		return nil, err
-	}
-
-	return newURL, nil
+	return nil, errors.New("failed to generate unique short code after retries")
 }
 
 func (u *urlUsecase) GetOriginalURL(ctx context.Context, shortCode string) (string, error) {

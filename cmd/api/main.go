@@ -43,6 +43,6 @@ func main() {
 	appHttp.NewURLHandler(r, uc)
 
 	// 5. Start Server
-	fmt.Println("Server starting on http://localhost:8080...")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	fmt.Println("Server starting on http://localhost:8989...")
+	log.Fatal(http.ListenAndServe(":8989", r))
 }

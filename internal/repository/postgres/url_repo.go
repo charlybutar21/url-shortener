@@ -22,18 +22,13 @@ func NewPostgresURLRepository(db *sql.DB) domain.URLRepository {
 	}
 }
 
-func (r *postgresURLRepository) GenerateID(ctx context.Context) (uint64, error) {
-	var id uint64
-	err := r.db.QueryRowContext(ctx, "SELECT nextval('urls_id_seq')").Scan(&id)
-	return id, err
-}
-
 func (r *postgresURLRepository) Store(ctx context.Context, u *domain.URL) error {
 	query := `
-		INSERT INTO urls (id, short_code, original_url, click_count, created_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO urls (short_code, original_url, click_count, created_at)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id
 	`
-	_, err := r.db.ExecContext(ctx, query, u.ID, u.ShortCode, u.OriginalURL, u.ClickCount, time.Now())
+	err := r.db.QueryRowContext(ctx, query, u.ShortCode, u.OriginalURL, u.ClickCount, time.Now()).Scan(&u.ID)
 	return err
 }
 
